@@ -1,0 +1,1157 @@
+{
+  "name": "The Telegram Verification Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        16
+      ],
+      "id": "59c4b862-bab7-46f7-a57f-2ba85d2e9fd9",
+      "name": "Telegram Trigger",
+      "webhookId": "bc1c5189-6d64-44bd-bebf-a658f78fe58c",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      },
+      "notes": "Listens for all incoming updates/messages from the Telegram bot."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "=/start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b0983a0d-8cbf-4cc1-9a27-f73e3dacd853"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b9bd4112-e6e9-4171-adbe-53c61894cb1d",
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "/verify",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/verify"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "8c27ccca-6719-43e9-86a5-00697123d92c",
+      "name": "Route Command",
+      "notes": "Directs the workflow based on the message text. It handles /start, /verify, and defaults to the verification logic path."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=لطفا ۴ رقم‌ آخر کارت بانکی خود را وارد کنید\\.\nمثال:1234\n\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        16
+      ],
+      "id": "8e061887-3ce1-44b8-b29a-aaba905f2904",
+      "name": "Ask for Verification Details",
+      "webhookId": "aff795cc-6703-49fa-bffa-d0e67c0cdff0",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      },
+      "notes": "Responds to /verify by asking the user for the last 4 digits and amount."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversation_state (chat_id, state)\nVALUES ($1, 'awaiting_last4')\nON CONFLICT (chat_id)\nDO UPDATE SET state = 'awaiting_last4';",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.from.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        16
+      ],
+      "id": "ccafa88d-fc63-4442-982d-9706d2b28032",
+      "name": "Set State: Awaiting last4",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT state, last4 FROM conversation_state WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.from.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        272
+      ],
+      "id": "e86dc073-5488-4c60-9546-924c9d925b99",
+      "name": "Get Conversation State",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.state }}",
+                    "rightValue": "awaiting_last4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "e76571a7-e80c-4500-933d-d3d5a1d83d59"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "awaiting_last4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "93953ce1-1ad2-464e-a477-72162e0af924",
+                    "leftValue": "={{ $json.state }}",
+                    "rightValue": "awaiting_amount",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "awaiting_amount"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        656,
+        272
+      ],
+      "id": "f740c5ea-c734-473d-9f4a-bf52cfd47147",
+      "name": "Route by State"
+    },
+    {
+      "parameters": {
+        "jsCode": "// This line is the fix. It looks directly at the trigger for this execution.\nconst text = $('Telegram Trigger').item.json.message.text;\n\nif (/^\\d{4}$/.test(text)) {\n  return { isValid: true, last4: text };\n} else {\n  return { isValid: false };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        256
+      ],
+      "id": "f5328180-833f-441c-a2a2-2f5cc016213c",
+      "name": "Validate Last 4 Digits"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f2e666c3-f441-455b-b664-ca9eca05e64d",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        256
+      ],
+      "id": "cde2beb2-8167-4102-a484-5d71f4c2f62c",
+      "name": "IF: last4 Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE conversation_state SET state = 'awaiting_amount', last4 = $1 WHERE chat_id = $2;",
+        "options": {
+          "queryReplacement": "={{ $items(\"Validate Last 4 Digits\")[0].json.last4 }},{{ $('Telegram Trigger').item.json.message.from.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1360,
+        160
+      ],
+      "id": "5fbd15ef-a897-4eb0-83b5-5db82762de0d",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4ae3bd7b-1c58-434d-9f76-b183035342d1",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1168,
+        576
+      ],
+      "id": "b2760588-c8b6-4d4a-bf10-c58bc4826381",
+      "name": "IF: Amount Valid?"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1XnemvVKvQ5vfk4uzDNkJ6OR2A0sRqqrAzvZnYT-hrl4",
+          "mode": "list",
+          "cachedResultName": "Bank Transactions",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XnemvVKvQ5vfk4uzDNkJ6OR2A0sRqqrAzvZnYT-hrl4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XnemvVKvQ5vfk4uzDNkJ6OR2A0sRqqrAzvZnYT-hrl4/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Last Four Digits",
+              "lookupValue": "={{ $items(\"Get Conversation State\")[0].json.last4 }}"
+            },
+            {
+              "lookupColumn": "Amount",
+              "lookupValue": "={{ $items(\"Validate Amount\")[0].json.amount }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1392,
+        560
+      ],
+      "id": "9ad0c021-8b56-4f90-b01e-1728e572b277",
+      "name": "Find Transaction",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "credentials": {
+        "googleApi": {
+          "id": "TiS9HVP74vDdacz5",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This line is the fix. It also looks directly at the trigger.\nconst text = $('Telegram Trigger').item.json.message.text.replace(/,/g, '');\n\nif (text && !isNaN(text)) {\n  return { isValid: true, amount: parseInt(text, 10) };\n} else {\n  return { isValid: false };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        576
+      ],
+      "id": "d45b45bc-9298-4d4e-810d-219082e6c8a4",
+      "name": "Validate Amount"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1XnemvVKvQ5vfk4uzDNkJ6OR2A0sRqqrAzvZnYT-hrl4",
+          "mode": "list",
+          "cachedResultName": "Bank Transactions",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XnemvVKvQ5vfk4uzDNkJ6OR2A0sRqqrAzvZnYT-hrl4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XnemvVKvQ5vfk4uzDNkJ6OR2A0sRqqrAzvZnYT-hrl4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "verified",
+            "row_number": "={{ $json.row_number }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Card Number",
+              "displayName": "Card Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Four Digits",
+              "displayName": "Last Four Digits",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Amount",
+              "displayName": "Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Password",
+              "displayName": "Password",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2320,
+        448
+      ],
+      "id": "8cd896b4-d1a4-45b5-9b40-3608f7106131",
+      "name": "Update Status to Verified",
+      "credentials": {
+        "googleApi": {
+          "id": "TiS9HVP74vDdacz5",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process Transaction Logic').item.json.chat_id }}",
+        "text": "=پرداخت کارت به کارت شما با موفقیت تایید شد\\.✅ از این که آقای طرح را انتخاب کردید سپاسگزاریم\\.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2640,
+        448
+      ],
+      "id": "9c7c608d-93b4-4aa8-a37c-b2d4e6ebbe1f",
+      "name": "Reply: Verified Successfully",
+      "webhookId": "063f091f-9802-4cbf-adfc-24a606dbeef9",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM conversation_state WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Process Transaction Logic').item.json.chat_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2864,
+        448
+      ],
+      "id": "4fb2e4f4-aa33-492e-b9ae-a0e375a613db",
+      "name": "Clear State",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process Transaction Logic').item.json.chat_id }}",
+        "text": "=پرداخت کارت به کارت شما در حال حاضر تایید شده است و نیازی به تلاش مجدد نیست\\.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2320,
+        640
+      ],
+      "id": "c5c7c4c2-6fd8-4aa6-84d8-785cdd6a22d1",
+      "name": "Reply: Already Verified",
+      "webhookId": "40154433-b292-4b03-84fc-d18e1f4c1fec",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM conversation_state WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Process Transaction Logic').item.json.chat_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2640,
+        640
+      ],
+      "id": "e4977055-29f2-48dc-9fcc-e9da78ccfa68",
+      "name": "Clear State1",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM conversation_state WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.from.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1648,
+        928
+      ],
+      "id": "5b9abd0d-891e-45c0-aabb-4afd69c8dd70",
+      "name": "Clear State2",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "فرمت وارد شده صحیح نیست\\. لطفا مجدد از کد دستوری /verify استفاده کرده و امتحان کنید\\.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        352
+      ],
+      "id": "b95f2ef3-a4bc-4d52-a3e5-49d8062008c4",
+      "name": "Retry 4digits",
+      "webhookId": "759aa009-c727-4249-8048-518fb69e863c",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=ممنون\\. حالا لطفا مبلغ دقیق پرداختی خود را به ریال وارد نمایید\\.\nمثال: 1000000",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        160
+      ],
+      "id": "6926da55-6265-4d78-b980-732bc62b28d8",
+      "name": "Amount Paid",
+      "webhookId": "ff6a7f5f-8b58-4d80-bc3c-282f4e299fbd",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+        "text": "=سلام خوش آمدید {{ $json.message.from.first_name }} عزیز! لطفا برای تایید تراکنش خود از گزینه ی /verify استفاده کنید.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        -240
+      ],
+      "id": "705293eb-ad51-4fd5-9260-48896c697b56",
+      "name": "Welcome Message",
+      "webhookId": "236ef052-208c-4a7c-af6b-2cccfdd43c33",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "فرمت وارد شده برای مبلغ پرداختی صحیح نیست\\. لطفا مجدد از کد دستوری /verify استفاده کرده و امتحان کنید\\.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        928
+      ],
+      "id": "12dcd17d-dfab-4ae4-abd8-5fd32b8f3de5",
+      "name": "Reply: Invalid Amount Format",
+      "webhookId": "385e837d-e2b6-424e-93e6-a2974161f5e2",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process Transaction Logic').item.json.chat_id }}",
+        "text": "=مقدار پرداختی یا ۴ رقم آخر شماره کارت شما صحیح نمیباشد\\.❌\nلطفا مجدد از کد دستوری /verify استفاده کرده و امتحان کنید\\.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2336,
+        880
+      ],
+      "id": "0548077e-fd26-4dd3-9843-72cba03acad6",
+      "name": "Reply: Invalid Payment",
+      "webhookId": "ed69a0ba-94c0-4543-9083-9a154ba355b0",
+      "credentials": {
+        "telegramApi": {
+          "id": "rPbpEZbAs7fX86xZ",
+          "name": "Telegram account 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the chat_id from the trigger that started this execution\nconst chatId = $('Telegram Trigger').item.json.message.chat.id;\n\nconst userInputAmount = $items(\"Validate Amount\")[0].json.amount;\nconst foundRows = $items(\"Find Transaction\");\n\nconst pendingRowItem = foundRows.find(item =>\n  item.json.hasOwnProperty('Status') &&\n  item.json.Status.trim().toLowerCase() === 'pending'\n);\n\nif (pendingRowItem) {\n  const row = pendingRowItem.json;\n  if (row.Amount == userInputAmount) {\n    row.decision = 'success';\n    row.chat_id = chatId; // <-- Add chat_id here\n    return row;\n  }\n}\n\nconst verifiedRowItem = foundRows.find(item =>\n  item.json.hasOwnProperty('Status') &&\n  item.json.Amount == userInputAmount\n);\n\nif (verifiedRowItem) {\n  // Add chat_id to the output here\n  return [{ json: { decision: 'already_verified', chat_id: chatId } }];\n}\n\n// Add chat_id to the output here too\nreturn [{ json: { decision: 'invalid_payment', chat_id: chatId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        560
+      ],
+      "id": "6fb892a3-c78e-4912-8731-99726fc908d4",
+      "name": "Process Transaction Logic"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "success",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "78c9d554-8e27-41de-a781-c833ffb9544c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "success"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5858456f-3b5c-4719-b7ba-c4bef3aad9ce",
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "already_verified",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "already verified"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0f3d3ee0-1cad-4dbf-8e27-3946d19f3d77",
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "invalid_payment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "invalid payment"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1920,
+        544
+      ],
+      "id": "5942fb32-0bb4-458c-a74b-3a4a3d1b0b21",
+      "name": "Route Decision"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM conversation_state WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Process Transaction Logic').item.json.chat_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2640,
+        880
+      ],
+      "id": "1b148e90-1e36-4939-b06d-96589c5ac062",
+      "name": "Clear State3",
+      "credentials": {
+        "postgres": {
+          "id": "muuu1TkUSdny5U7n",
+          "name": "SupaBase"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Route Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set State: Awaiting last4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Conversation State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for Verification Details": {
+      "main": [
+        []
+      ]
+    },
+    "Set State: Awaiting last4": {
+      "main": [
+        [
+          {
+            "node": "Ask for Verification Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation State": {
+      "main": [
+        [
+          {
+            "node": "Route by State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by State": {
+      "main": [
+        [
+          {
+            "node": "Validate Last 4 Digits",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Amount",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Last 4 Digits": {
+      "main": [
+        [
+          {
+            "node": "IF: last4 Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: last4 Valid?": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry 4digits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Amount Paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Amount Valid?": {
+      "main": [
+        [
+          {
+            "node": "Find Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: Invalid Amount Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Amount": {
+      "main": [
+        [
+          {
+            "node": "IF: Amount Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Transaction": {
+      "main": [
+        [
+          {
+            "node": "Process Transaction Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status to Verified": {
+      "main": [
+        [
+          {
+            "node": "Reply: Verified Successfully",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply: Verified Successfully": {
+      "main": [
+        [
+          {
+            "node": "Clear State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply: Already Verified": {
+      "main": [
+        [
+          {
+            "node": "Clear State1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Message": {
+      "main": [
+        []
+      ]
+    },
+    "Reply: Invalid Amount Format": {
+      "main": [
+        [
+          {
+            "node": "Clear State2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Transaction Logic": {
+      "main": [
+        [
+          {
+            "node": "Route Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Decision": {
+      "main": [
+        [
+          {
+            "node": "Update Status to Verified",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: Already Verified",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: Invalid Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply: Invalid Payment": {
+      "main": [
+        [
+          {
+            "node": "Clear State3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b1cffce1-6f54-4273-80e3-3c9055c3292f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3ef91c05c50d2a164fa64f74c5f1553420293472ac423ff3be67b011edf9355d"
+  },
+  "id": "wDL932CVpV96X42a",
+  "tags": []
+}
