@@ -1,0 +1,10 @@
+# OS/editor junk
+*.log
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.env
+secrets/
+credentials*.json
