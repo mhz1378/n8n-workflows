@@ -1,0 +1,865 @@
+{
+  "name": "o3_approval_pipeline_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/approval",
+        "options": {
+          "responseData": "✅ Thanks, your decision was recorded."
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -240,
+        48
+      ],
+      "id": "8d604a20-84da-4ade-b6f4-c9a752e86317",
+      "name": "01 Webhook Trigger: Approval Decision",
+      "webhookId": "12e347b0-b52a-4a2e-b096-4c5448f9641f"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import hashlib\nimport hmac\nimport time\nimport os\n\nsecret = os.getenv(\"SECRET_KEY\", \"supersecret\")\nnow = int(time.time())\n\nout = []\n\nfor item in items:\n    q = item[\"json\"].get(\"query\", {})\n    cid = q.get(\"cid\")\n    status = q.get(\"status\")\n    action = q.get(\"action\")\n    exp = int(q.get(\"exp\", \"0\"))\n    sig = q.get(\"sig\")\n\n    payload = f\"{cid}|{status}|{exp}\"\n    check_sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()\n\n    # Default result\n    result = {\n        \"correlation_id\": cid,\n        \"new_status\": status,\n        \"reason\": None\n    }\n\n    if sig != check_sig:\n        result[\"action\"] = \"invalid\"\n        result[\"reason\"] = \"Invalid signature\"\n    elif exp < now:\n        result[\"action\"] = \"expired\"\n        result[\"reason\"] = \"Link expired\"\n    elif action == \"approve\":\n        result[\"action\"] = \"approve\"\n        result[\"actor\"] = \"manager\"  # later replace with real manager identity\n    elif action == \"reject\":\n        result[\"action\"] = \"reject\"\n        result[\"actor\"] = \"manager\"\n    else:\n        result[\"action\"] = \"unknown\"\n        result[\"reason\"] = \"Unsupported action\"\n\n    out.append({\"json\": result})\n\nreturn out\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        48
+      ],
+      "id": "69739caa-b158-4dba-926f-4c549df5b787",
+      "name": "02 FN: Verify Signature + TTL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE tickets\nSET status = $2, updated_at = NOW()\nWHERE correlation_id = $1::uuid\nRETURNING id, status, updated_at, correlation_id;\n",
+        "options": {
+          "queryReplacement": "={{$json.correlation_id}},{{$json.new_status}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        -160
+      ],
+      "id": "e8c1e6b0-3dd5-4fa4-a1ae-0fbfbd967c77",
+      "name": "04c DB: Update Ticket Status",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Updates ticket status by correlation ID. Also inserts audit row and notifies ticket owner. Requires tickets table and audit schema."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chat_id, correlation_id, status, subject\nFROM tickets\nWHERE correlation_id = $1::uuid;",
+        "options": {
+          "queryReplacement": "={{ $('04c DB: Update Ticket Status').item.json.correlation_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1120,
+        -160
+      ],
+      "id": "82db6abd-6e41-4d62-86e1-3decd397f657",
+      "name": "04c1 DB: Get Ticket Owner",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "115bb477-3dfa-4d9b-8e4b-cd2ef15439e1",
+              "leftValue": "={{ $json[\"status\"] }}",
+              "rightValue": "resolved",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        -256
+      ],
+      "id": "6e7304d6-f474-45ec-bb84-04e4f18abd15",
+      "name": "04c1a IF: Resolved or In Progress"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "=🎉 Good news! Your ticket (<code>{{ $json.correlation_id }}</code>) has been resolved.  \nYou can check details anytime with:  \n/status <code>{{ $json.correlation_id }}</code>",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        -352
+      ],
+      "id": "51199feb-dd08-43e1-ac7b-61a14acaffcb",
+      "name": "05c1a Telegram: Notify Resolved",
+      "webhookId": "834b2795-7e52-4264-b787-7280bf60de36",
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "=🔄 Your ticket (<code>{{ $json.correlation_id }}<>.code) is now being worked on.  \nWe’ll notify you once it’s resolved.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        -160
+      ],
+      "id": "c67d33f2-fe1c-4cee-9161-733de752a2a2",
+      "name": "05c1b Telegram: Notify In Progress",
+      "webhookId": "560dda9b-b8e5-4e5b-9705-4d6ed17ce50d",
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
+    },
+    {
+      "parameters": {
+        "chatId": "=74166550",
+        "text": "=✅ <b>Ticket <code>{{ $json.correlation_id }}</code></b> updated!\n📌 <b>New Status:</b> {{ $json[\"status\"] }}\n⏰ <b>Updated At:</b> {{ new Date($(\"04c DB: Update Ticket Status\").item.json.updated_at).toLocaleString() }}\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        -64
+      ],
+      "id": "5f00822e-47fe-4825-ad2b-e2e2195212c7",
+      "name": "05c Telegram: Update Confirmation",
+      "webhookId": "2e047d36-651f-4c1e-9970-8adf7029c70c",
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4eb644e5-1340-492e-96e7-66198d2d72ad",
+              "leftValue": "={{ !!$json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2016,
+        -256
+      ],
+      "id": "baf5ad5a-3eb9-4e7a-90fd-0576eaa0c619",
+      "name": "Notify Failed?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO workflow_errors \n  (workflow_id, workflow_name, execution_id, error_message, json_payload)\nVALUES \n  ($1, $2, $3, $4, $5::jsonb);\n",
+        "options": {
+          "queryReplacement": "={{ $workflow.id }},\n{{ $workflow.name }},\n{{ $execution.id }},\n{{ $json.error?.message || 'unknown' }},\n{{ JSON.stringify($json) }}\n"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2240,
+        -256
+      ],
+      "id": "c06890be-289b-4a0d-8494-c865af88dafe",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ticket_audit\n  (ticket_id, correlation_id, action, new_status, actor_chat_id)\nVALUES\n  ($1, $2, 'update', $3, $4);\n",
+        "options": {
+          "queryReplacement": "={{ $json.id }},\n{{ $json.correlation_id }},\n{{ $json.status }},\n{{ $('02 FN: Verify Signature + TTL').item.json.actor }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        896,
+        -160
+      ],
+      "id": "77d73de2-c8fa-4606-9ebd-4befb2a98fa0",
+      "name": "04c2 DB: Insert Audit Row",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "74166550",
+        "text": "=❌ Manager rejected update.\nTicket <code>{{ $('02 FN: Verify Signature + TTL').item.json.correlation_id }}</code> stays unchanged.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        32
+      ],
+      "id": "8ab74934-d77b-4eed-bdcb-833226595736",
+      "name": "Text (reject)",
+      "webhookId": "ec8dcd4d-28ad-478c-a1b5-0e87133ff7c5",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, correlation_id \nFROM tickets \nWHERE correlation_id = $1::uuid;",
+        "options": {
+          "queryReplacement": "={{$json.correlation_id}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        32
+      ],
+      "id": "342cf8ef-5004-4202-baf1-81600dc32427",
+      "name": "04r0 DB: Get Ticket ID",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ticket_audit \n  (ticket_id, correlation_id, action, new_status, actor_chat_id)\nVALUES \n  ($1, $2, 'reject', $3, $4);\n",
+        "options": {
+          "queryReplacement": "={{$json.id}},  {{$json.correlation_id}},  {{ $('02 FN: Verify Signature + TTL').item.json.new_status }},  {{ $('02 FN: Verify Signature + TTL').item.json.actor }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        896,
+        32
+      ],
+      "id": "6dd0573d-f427-4cbb-a1fd-19da009fe22e",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dc1d552d-728a-46cd-9024-14d88b01f77f",
+              "leftValue": "={{ $json[\"status\"] }}",
+              "rightValue": "resolved",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        -352
+      ],
+      "id": "6696ddb3-8ade-4ffa-a38d-0cfcbfda63bf",
+      "name": "If Resolved"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a4a97bc7-96b5-4e5b-8ade-fd4f9d292016",
+              "leftValue": "={{ $json[\"status\"] }}",
+              "rightValue": "in_progress",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        -160
+      ],
+      "id": "6c44cd49-ff15-4b85-bd64-8c2267260cee",
+      "name": "If in_progress"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json[\"action\"] }}",
+                    "rightValue": "approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b720a50f-1e38-477b-b828-f85c8e4e10d9"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "approve"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1f0d9637-5986-4e90-9f64-3829a12c15ef",
+                    "leftValue": "={{ $json[\"action\"] }}",
+                    "rightValue": "reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reject"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2ad38675-da19-4380-882c-0c3da132eea1",
+                    "leftValue": "={{ $json[\"action\"] }}",
+                    "rightValue": "expired",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "expired"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "74c8e5cd-1441-43ef-bf17-98956cf7e63c",
+                    "leftValue": "={{ $json[\"action\"] }}",
+                    "rightValue": "invalid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "invalid"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        208,
+        16
+      ],
+      "id": "3f9db57b-5acb-48a6-a076-4674767c0436",
+      "name": "Actions"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ticket_audit\n  (correlation_id, action, new_status, actor_chat_id)\nVALUES\n  ($1, 'expired', $2, 'system');\n",
+        "options": {
+          "queryReplacement": "={{ $json.correlation_id }}, {{ $json.new_status }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        224
+      ],
+      "id": "253f2902-20c0-4d22-9b95-15113be4a1ca",
+      "name": "04e DB: Insert Audit Expired",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ticket_audit\n  (correlation_id, action, new_status, actor_chat_id)\nVALUES\n  ($1, 'invalid', $2, 'system');\n",
+        "options": {
+          "queryReplacement": "={{ $json.correlation_id }}, {{ $json.new_status }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        416
+      ],
+      "id": "e1ceaed5-7575-404f-8650-17f7777ff14d",
+      "name": "04i DB: Insert Audit Invalid",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "74166550",
+        "text": "=⏰ Manager notice: approval link expired for ticket <code>{{ $('02 FN: Verify Signature + TTL').item.json.correlation_id }}</code>.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        224
+      ],
+      "id": "c6dbb853-7e73-4694-9109-04a8107c31f7",
+      "name": "05e Telegram: Notify Expired",
+      "webhookId": "b98a6506-35d0-41a8-8807-574cf8bb60db",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "74166550",
+        "text": "=🚨 Invalid approval attempt detected.\nTicket: <code>{ $('02 FN: Verify Signature + TTL').item.json.correlation_id }}</code>",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        416
+      ],
+      "id": "dedde375-a88b-41ba-9f64-1b9368bd3ad8",
+      "name": "05i Telegram: Alert Invalid",
+      "webhookId": "964c3124-8fd4-4e92-b310-8ff4fa58cba0",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "01 Webhook Trigger: Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "02 FN: Verify Signature + TTL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 FN: Verify Signature + TTL": {
+      "main": [
+        [
+          {
+            "node": "Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04c DB: Update Ticket Status": {
+      "main": [
+        [
+          {
+            "node": "04c2 DB: Insert Audit Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04c1 DB: Get Ticket Owner": {
+      "main": [
+        [
+          {
+            "node": "04c1a IF: Resolved or In Progress",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "05c Telegram: Update Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04c1a IF: Resolved or In Progress": {
+      "main": [
+        [
+          {
+            "node": "If Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If in_progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05c1a Telegram: Notify Resolved": {
+      "main": [
+        [
+          {
+            "node": "Notify Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05c1b Telegram: Notify In Progress": {
+      "main": [
+        [
+          {
+            "node": "Notify Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05c Telegram: Update Confirmation": {
+      "main": [
+        []
+      ]
+    },
+    "Notify Failed?": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04c2 DB: Insert Audit Row": {
+      "main": [
+        [
+          {
+            "node": "04c1 DB: Get Ticket Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04r0 DB: Get Ticket ID": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Text (reject)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Resolved": {
+      "main": [
+        [
+          {
+            "node": "05c1a Telegram: Notify Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If in_progress": {
+      "main": [
+        [
+          {
+            "node": "05c1b Telegram: Notify In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actions": {
+      "main": [
+        [
+          {
+            "node": "04c DB: Update Ticket Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "04r0 DB: Get Ticket ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "04e DB: Insert Audit Expired",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "04i DB: Insert Audit Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04e DB: Insert Audit Expired": {
+      "main": [
+        [
+          {
+            "node": "05e Telegram: Notify Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04i DB: Insert Audit Invalid": {
+      "main": [
+        [
+          {
+            "node": "05i Telegram: Alert Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a29cc1fd-bbc6-40ef-8bb8-e102ac2e1401",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9c8d0d4640139c59e2bc183c0a14df0fbc0573cb91e494f5db8144fe78fe28ca"
+  },
+  "id": "HfEkAtmsQL3fkHlQ",
+  "tags": [
+    {
+      "createdAt": "2025-09-21T12:41:32.724Z",
+      "updatedAt": "2025-09-21T12:41:32.724Z",
+      "id": "U3dmJtj3rIeNH0Es",
+      "name": "o2"
+    },
+    {
+      "createdAt": "2025-09-21T12:41:41.273Z",
+      "updatedAt": "2025-09-21T12:41:41.273Z",
+      "id": "Zs63pCZlRakSC2XC",
+      "name": "triage"
+    }
+  ]
+}

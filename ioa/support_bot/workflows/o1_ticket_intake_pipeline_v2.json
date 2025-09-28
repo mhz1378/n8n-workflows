@@ -1,0 +1,1407 @@
+{
+  "name": "IOA O1 ticket_intake_pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1264,
+        -752
+      ],
+      "id": "75750076-a6ed-45b1-addb-3189432fe028",
+      "name": "01 Telegram Trigger: Intake + Status",
+      "webhookId": "ce5e4331-643e-4f6f-b465-96e93b097863",
+      "notesInFlow": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Listens for Telegram bot messages. Routes commands like /start, /new, /status, /update, /list into the Switch node."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ce357ab4-c67e-4bf7-b791-9f90b568aa28",
+                    "leftValue": "={{ $json[\"message\"][\"text\"].split(\" \")[0].toLowerCase() }}",
+                    "rightValue": "/start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json[\"message\"][\"text\"].split(\" \")[0].toLowerCase() }}",
+                    "rightValue": "/status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    },
+                    "id": "5c875ce6-1a63-42bc-b828-426e56fedd7d"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/status"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "db0d9d53-1fa2-4b95-b4ed-026ea97ac21f",
+                    "leftValue": "={{ $json[\"message\"][\"text\"].split(\" \")[0].toLowerCase() }}",
+                    "rightValue": "/new",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/new"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "54b2e9fb-1cd5-4634-a7e9-d29c936d0f9d",
+                    "leftValue": "={{ $json[\"message\"][\"text\"].split(\" \")[0].toLowerCase() }}",
+                    "rightValue": "/update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1c4a4f1b-1f99-4a5d-93d3-48887d112dc2",
+                    "leftValue": "={{ $json[\"message\"][\"text\"].split(\" \")[0].toLowerCase() }}",
+                    "rightValue": "/list",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/list"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1008,
+        -816
+      ],
+      "id": "091db64b-c128-432f-86f6-b1a02c80b207",
+      "name": "02 Switch: Route by Command",
+      "notesInFlow": true,
+      "notes": "Splits incoming commands into different branches. Output keys = command names (/new, /status, etc.). Fallback = Invalid Command."
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\nimport hashlib\nimport uuid\n\n# Get the first incoming item\nitem = items[0]\n\n# Correct path to Telegram text\ntext = item[\"json\"].get(\"message\", {}).get(\"text\", \"\")\n\n# Defaults\nparsed = {\n    \"requester_name\": \"Unknown\",\n    \"requester_email\": \"unknown@example.com\",\n    \"requester_phone\": \"N/A\",\n    \"subject\": \"No subject\",\n    \"description\": \"No description\",\n    \"source\": \"telegram\",\n    \"priority\": \"normal\",\n    \"status\": \"new\",        # added here instead of in query\n    \"external_id\": None\n}\n\n# Regex patterns\npatterns = {\n    \"requester_name\": r\"Name:\\s*(.+)\",\n    \"requester_email\": r\"Email:\\s*(\\S+)\",\n    \"requester_phone\": r\"Phone:\\s*(.+)\",\n    \"subject\": r\"Subject:\\s*(.+)\",\n    \"description\": r\"Description:\\s*(.+)\"\n}\n\nfor key, pattern in patterns.items():\n    match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)\n    if match:\n        parsed[key] = match.group(1).strip()\n\n# Correlation ID\nparsed[\"correlation_id\"] = str(uuid.uuid4())\n\n# Build dedupe key\ndedupe_source = f\"{parsed['requester_email']}|{parsed['subject']}\"\nparsed[\"dedupe_key\"] = hashlib.sha256(dedupe_source.encode()).hexdigest()\n\n# External ID from Telegram chat\nchat_id = item[\"json\"].get(\"message\", {}).get(\"chat\", {}).get(\"id\")\nparsed[\"external_id\"] = str(chat_id) if chat_id else \"N/A\"\n\n# Output in correct n8n format\nreturn [{\"json\": parsed}]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        -896
+      ],
+      "id": "8bab1b34-6033-47ae-b998-04f74c388c49",
+      "name": "03a FN: Normalize + Hash",
+      "notes": "Parses ticket info from freeform Telegram text (Name, Email, Phone, Subject, Description). Generates correlation ID (UUID) and dedupe key (SHA-256 hash of email+subject)."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, correlation_id, chat_id\nFROM upsert_ticket(\n  $1::uuid,\n  $2::text,\n  $3::text,\n  $4::text,\n  $5::text,\n  $6::text,\n  $7::text,\n  $8::text,\n  $9::text,\n  $10::text,\n  $11::text,\n  $12::text\n);\n",
+        "options": {
+          "queryReplacement": "={{$json.correlation_id}}\n\n{{$json.source}}\n\n{{$json.external_id}}\n\n{{$json.requester_name}}\n\n{{$json.requester_email}}\n\n{{$json.requester_phone}}\n\n{{$json.subject}}\n\n{{$json.description}}\n\n{{$json.status}}\n\n{{$json.priority}}\n\n{{$json.dedupe_key}}\n\n{{ $json.external_id }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -384,
+        -896
+      ],
+      "id": "653cffb0-47ac-4a55-a4c6-a83d430c21a1",
+      "name": "04a DB: Upsert Ticket",
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Executes stored Postgres function upsert_ticket. Inserts or updates a ticket record with parsed fields. Requires function to exist in DB. \ncorrelation_id, source, external_id, requester_*, subject, description, status, priority, dedupe_key\nOutput: ticket ID and correlation ID"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('01 Telegram Trigger: Intake + Status').item.json.message.from.id }}",
+        "text": "=Ticket received ✅\nCorrelation ID: <code>{{ $json.correlation_id }}</code>\nSave this ID to check status later.\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -32,
+        -896
+      ],
+      "id": "c1af2b46-5723-433c-a89d-a53a4b7ecd4a",
+      "name": "05a Telegram Ack",
+      "webhookId": "f2d3d095-31e4-4972-9047-5a6350672e43",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\n\nout_items = []\n\nfor item in items:\n    text = item[\"json\"].get(\"message\", {}).get(\"text\", \"\").strip()\n    parts = text.split(maxsplit=1)\n\n    if len(parts) == 2:\n        correlation_id = parts[1].strip()\n        # quick regex UUID check\n        if not re.match(r'^[0-9a-fA-F-]{36}$', correlation_id):\n            correlation_id = None\n    else:\n        correlation_id = None\n\n    out_items.append({\n        \"json\": {\n            \"correlation_id\": correlation_id,\n            \"chat_id\": item[\"json\"][\"message\"][\"chat\"][\"id\"]\n        }\n    })\n\nreturn out_items\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        -1328
+      ],
+      "id": "385ed93d-2724-4e9c-a01e-4b5196bd7f66",
+      "name": "03b FN: Parse Status Command"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT subject, status, created_at, updated_at, chat_id\nFROM tickets\nWHERE correlation_id = $1::uuid;\n",
+        "options": {
+          "queryReplacement": "={{$json.correlation_id}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        64,
+        -1696
+      ],
+      "id": "cce164fe-f498-4b6a-9bb0-682a18b69c52",
+      "name": "04b DB: Get Ticket Status",
+      "retryOnFail": true,
+      "alwaysOutputData": true,
+      "notesInFlow": true,
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Fetches ticket info by correlation ID. Returns subject, status, timestamps. Handles missing tickets through the downstream IF node."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('02 Switch: Route by Command').item.json.message.from.id }}",
+        "text": "=✅ Ticket ID: {{ $json.chat_id }}\n📄 Ticket: {{ $json.subject }}\n📌 Status: {{ $json.status }}\n🕒 Created: {{ new Date($json.created_at).toLocaleString(\"en-GB\", { dateStyle: \"medium\", timeStyle: \"short\" }) }}\n🔄 Last Updated: {{ new Date($json.updated_at).toLocaleString(\"en-GB\", { dateStyle: \"medium\", timeStyle: \"short\" }) }}\n\n",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        -1248
+      ],
+      "id": "aaf75df1-e658-4c61-9a66-d75fb4089043",
+      "name": "05b Telegram: Status Reply",
+      "webhookId": "bae8bec4-4af5-4bf9-bba6-218b8bd5b0f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3a901b12-fe84-4f01-993a-185a2753eb0e",
+              "leftValue": "={{ $json.correlation_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        -1680
+      ],
+      "id": "2b5da54f-d452-4949-a8a3-423cc883323c",
+      "name": "03b1 IF: Has Correlation ID"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chat_id}}",
+        "text": "=❌ Please provide a correlation ID.\nFormat: /status correlation_id\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        -1424
+      ],
+      "id": "f2b9c375-50fa-453d-b234-c42568248fa2",
+      "name": "05b Telegram: Status Reply (Error)",
+      "webhookId": "4095be65-c09f-4d65-8800-8f8d9e5b46a4",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.from.id }}",
+        "text": "=⚠️ I didn’t understand that request.\nTry /new or /status <ID>.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        16
+      ],
+      "id": "eada2e4a-9ea8-4bc3-8ed4-02912e052421",
+      "name": "Telegram: Invalid Command",
+      "webhookId": "84089957-fe6b-432b-8828-ccd7930ce954",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\n\nout_items = []\n\nfor item in items:\n    text = item[\"json\"].get(\"message\", {}).get(\"text\", \"\").strip()\n    parts = text.split(maxsplit=2)\n\n    if len(parts) == 3:\n        correlation_id, new_status = parts[1], parts[2].lower()\n        if not re.match(r'^[0-9a-fA-F-]{36}$', correlation_id):\n            correlation_id = None\n    else:\n        correlation_id, new_status = None, None\n\n    out_items.append({\n        \"json\": {\n            \"correlation_id\": correlation_id,\n            \"new_status\": new_status,\n            \"chat_id\": item[\"json\"][\"message\"][\"chat\"][\"id\"]\n        }\n    })\n\nreturn out_items\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        -576
+      ],
+      "id": "4fac7f4e-3d98-418b-ac32-f5211b837846",
+      "name": "03c FN: Parse Update Command"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "49a8e0db-73d3-4615-add4-c21fe8eb2fb4",
+              "leftValue": "={{ $json.correlation_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        304,
+        -800
+      ],
+      "id": "f1fcd9a7-4ef6-4e64-a823-1762df180d77",
+      "name": "03c1 IF: Has Correlation ID"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('01 Telegram Trigger: Intake + Status').item.json.message.from.id }}",
+        "text": "=❌ Invalid or missing correlation ID. Format: /update <ID> <status>.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        640,
+        -512
+      ],
+      "id": "8090cc41-0f99-422d-96a5-c8843c35325b",
+      "name": "Send a text message",
+      "webhookId": "168df2e1-e83a-4ba9-b679-072bd8f51df8",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9ee9632a-361a-4cd3-a842-8e839ae84c2d",
+              "leftValue": "={{ $json[\"new_status\"] }}",
+              "rightValue": "new",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "5e821125-60f9-45ce-b803-f50a5a3b0776",
+              "leftValue": "={{ $json[\"new_status\"] }}",
+              "rightValue": "in_progress",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "8205c0d2-293f-43bc-aaec-2200f801b851",
+              "leftValue": "={{ $json[\"new_status\"] }}",
+              "rightValue": "resolved",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        656,
+        -816
+      ],
+      "id": "a8c971fd-6cfe-41c7-92b4-bb9f1953b5cb",
+      "name": "03c2 IF: Valid Status"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('01 Telegram Trigger: Intake + Status').item.json.message.from.id }}",
+        "text": "=⚠️ Invalid status. Allowed values: new, in_progress, resolved.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        -336
+      ],
+      "id": "0a37f3c6-381b-4207-bbe9-c800d15b4088",
+      "name": "05c Telegram: Invalid Status",
+      "webhookId": "477de1f0-cea0-4b5e-80e8-283af9452d4a",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      },
+      "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "02a8b086-3e20-4576-a746-9e0bde67aba4",
+              "leftValue": "={{ $json[\"chat_id\"] }}",
+              "rightValue": "74166550",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -96,
+        -576
+      ],
+      "id": "58ede8e7-2288-4d49-9e7b-3c0821d2776a",
+      "name": "03c0 IF: Is Operator"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('01 Telegram Trigger: Intake + Status').item.json.message.from.id }}",
+        "text": "=❌ You don’t have permission to update tickets.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        -384
+      ],
+      "id": "476ce475-7f83-4280-97c7-7def7ea3a96c",
+      "name": "05c0 Telegram: Unauthorized Update Attempt",
+      "webhookId": "c0905e30-f115-4e85-9b24-ab26e3954ad3",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "19a37b2c-e9ae-4a6c-9e6d-47f3fa7e5e69",
+              "leftValue": "={{ $json[\"chat_id\"] }}",
+              "rightValue": "={{ $('01 Telegram Trigger: Intake + Status').item.json.message.chat.id }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        -1232
+      ],
+      "id": "00a3fad9-7621-491f-9cfe-067d2b5cffec",
+      "name": "04b1 IF: Ticket Belongs To User"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('02 Switch: Route by Command').item.json.message.from.id }}",
+        "text": "=❌ You do not have access to this ticket.\nOnly the ticket creator can view its status.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        -960
+      ],
+      "id": "c4a06b94-befd-4187-8e51-dcd24cc477f4",
+      "name": "05b1 Telegram: Unauthorized Status Check",
+      "webhookId": "0fa252cb-177d-4e95-8456-34753477d976",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f367a262-4b55-40ad-a0ef-711ac9ebfa10",
+              "leftValue": "={{ !!$json.error }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        -1472
+      ],
+      "id": "da20820c-0a9f-4bfc-a945-6f31b58adbb1",
+      "name": "04b0 IF: DB Lookup Failed?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('02 Switch: Route by Command').item.json.message.from.id }}",
+        "text": "=❌ Sorry, I couldn’t fetch your ticket right now. Please try again in a minute.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        -1488
+      ],
+      "id": "f26b512a-cd14-4766-98ba-34e6fdc572b7",
+      "name": "05b0 Telegram: Status DB Error",
+      "webhookId": "96e6b1fa-9500-4e81-8433-ec87963af06b",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1a87141a-6e78-4222-9523-00795be95f6f",
+              "leftValue": "={{ $json[\"subject\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        -1696
+      ],
+      "id": "ced6568d-f760-4ec1-b1c6-cb4c23fb3f25",
+      "name": "04b1 IF: No Ticket Found"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('02 Switch: Route by Command').item.json.message.from.id }}",
+        "text": "=❌ No ticket found with that ID.\nDouble-check your ID or create a new ticket with /new",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        800,
+        -1712
+      ],
+      "id": "a9146b44-f4e3-4727-b384-ef8466cb2ad6",
+      "name": "Send a text message1",
+      "webhookId": "cc28681b-50ca-45f5-a024-bef21cb8ae36",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0bfef915-ea45-4b6d-bf12-8999b67b8044",
+              "leftValue": "={{$json.correlation_id}}",
+              "rightValue": "=^[0-9a-fA-F-]{36}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -416,
+        -1328
+      ],
+      "id": "5412e621-8f63-4779-9487-f118f59eb53d",
+      "name": "03b IF: Has Valid Correlation ID Format"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chat_id}}",
+        "text": "=⚠️ Invalid ticket ID format. Please provide a valid correlation ID (UUID).",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -32,
+        -1136
+      ],
+      "id": "828ff628-4ba8-48b6-a7a6-56b6a88cdcff",
+      "name": "Send a text message2",
+      "webhookId": "2291928b-6bdc-4071-84f6-f8d84484198e",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.from.id }}",
+        "text": "=👋 <b>Welcome to the Support Bot</b>  \n\nYou can create and manage tickets right here:  \n\n• <b>/new</b> — Open a new support ticket  \n• <b>/update &lt;ID&gt; &lt;status&gt;</b> — Update your ticket’s status  \n• <b>/status &lt;ID&gt;</b> — Check the current status of a ticket  \n\n💡 Save your <b>Ticket ID</b> when you create one — you’ll need it for updates. ✅\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -752,
+        -1728
+      ],
+      "id": "2fcb38f7-640b-45f1-9553-b86e5e03e54c",
+      "name": "Welcome Message",
+      "webhookId": "b7ac58ed-e8d7-48e8-b9a1-3a52e1376b2c",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.from.id }}",
+        "text": "=❌ <b>You are not authorized to use this command.</b>",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        224
+      ],
+      "id": "a21a6f03-937a-473e-b4c4-7dabd4cdb5dd",
+      "name": "Send a text message3",
+      "webhookId": "42cc248a-3229-49e4-a21a-2c2ed5059a49",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ce4f2418-7a43-44b5-845e-8abf8d0108b2",
+              "leftValue": "={{$json[\"message\"][\"from\"][\"id\"]}}",
+              "rightValue": "YOUR_ADMIN_ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        -192
+      ],
+      "id": "20af9ef3-46a2-49db-b4aa-1d3095537a6e",
+      "name": "Check Admin"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT correlation_id, subject, status, created_at\nFROM tickets\nORDER BY created_at DESC\nLIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        -64
+      ],
+      "id": "d8eaaa4e-974c-499a-b0d9-aa5071bf6561",
+      "name": "DB: List Tickets",
+      "credentials": {
+        "postgres": {
+          "id": "DeyLRt5YrGqjUrds",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -64
+      ],
+      "id": "be2901bf-2d8a-4adf-9366-72c0cbe8383c",
+      "name": "Send a text message4",
+      "webhookId": "93444267-52aa-4b71-bb7a-ade43f15f6ad",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tickets = items;\n\nlet message = \"📋 <b>Latest Tickets</b>\\n\\n\";\n\ntickets.forEach((row, i) => {\n  message += `${i+1}. <b>ID:</b> <code>${row.json.correlation_id}</code>\\n`;\n  message += `   <b>Status:</b> ${row.json.status}\\n`;\n  message += `   <i>${row.json.subject || \"No subject\"}</i>\\n`;\n  message += `   Created: ${row.json.created_at}\\n\\n`;\n});\n\n// pull original chat_id from the trigger\nconst chatId = $(\"01 Telegram Trigger: Intake + Status\").item.json.message.from.id;\n\nreturn [{ json: { text: message, chat_id: chatId } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -64
+      ],
+      "id": "a51a7d6c-2d88-493b-9b63-e00f26d550e2",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "content": "# 🛠 Setup Requirements\n\n---\n\n## 1️⃣ Database Tables\n- **tickets**  \n  `(id, correlation_id, chat_id, requester_name, requester_email, requester_phone, subject, description, status, priority, dedupe_key, created_at, updated_at)`\n\n- **ticket_audit**  \n  `(ticket_id, correlation_id, action, new_status, actor_chat_id, created_at)`\n\n- **workflow_errors**  \n  `(workflow_id, workflow_name, execution_id, last_node_executed, error_message, json_payload, created_at)`\n\n---\n\n## 2️⃣ Stored Function: `upsert_ticket`\n- Purpose: insert **or** update tickets.  \n- **Inputs:**  \n  `correlation_id, source, external_id, requester_name, requester_email, requester_phone, subject, description, status, priority, dedupe_key, external_id`  \n- **Returns:**  \n  `ticket_id, correlation_id, chat_id`\n\n---\n\n## 3️⃣ Credentials\n- Add **Postgres** credentials in n8n (must match your DB).  \n- Add **Telegram Bot** credentials in n8n.  \n\n---\n\n## 4️⃣ Placeholders to Replace\n- `YOUR_ADMIN_ID` → replace with your own Telegram ID (for admin-only commands like /list).  \n- `YOUR_OPERATOR_ID` → replace with the operator’s Telegram ID (for /update permissions).   \n\n👉 Use [@userinfobot](https://t.me/userinfobot) in Telegram to find your ID.\n",
+        "height": 1104,
+        "width": 736,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2816,
+        -1104
+      ],
+      "typeVersion": 1,
+      "id": "db493f96-774a-4867-8baf-ec6101712005",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# 📌 Function: upsert_ticket\n\n### Purpose → Insert or update a support ticket in the tickets table.\n### Returns → id, correlation_id, chat_id.\n\n### 🧩 SQL Template\n-- Create or replace the upsert_ticket function\nCREATE OR REPLACE FUNCTION upsert_ticket(\n    p_correlation_id UUID,\n    p_source TEXT,\n    p_external_id TEXT,\n    p_requester_name TEXT,\n    p_requester_email TEXT,\n    p_requester_phone TEXT,\n    p_subject TEXT,\n    p_description TEXT,\n    p_status TEXT,\n    p_priority TEXT,\n    p_dedupe_key TEXT,\n    p_chat_id TEXT\n)\nRETURNS TABLE (\n    id BIGINT,\n    correlation_id UUID,\n    chat_id TEXT\n) AS $$\nBEGIN\n    INSERT INTO tickets (\n        correlation_id, source, external_id,\n        requester_name, requester_email, requester_phone,\n        subject, description, status, priority, dedupe_key, chat_id,\n        created_at, updated_at\n    )\n    VALUES (\n        p_correlation_id, p_source, p_external_id,\n        p_requester_name, p_requester_email, p_requester_phone,\n        p_subject, p_description, p_status, p_priority, p_dedupe_key, p_chat_id,\n        NOW(), NOW()\n    )\n    ON CONFLICT (correlation_id)\n    DO UPDATE SET\n        requester_name = EXCLUDED.requester_name,\n        requester_email = EXCLUDED.requester_email,\n        requester_phone = EXCLUDED.requester_phone,\n        subject = EXCLUDED.subject,\n        description = EXCLUDED.description,\n        status = EXCLUDED.status,\n        priority = EXCLUDED.priority,\n        dedupe_key = EXCLUDED.dedupe_key,\n        updated_at = NOW()\n    RETURNING tickets.id, tickets.correlation_id, tickets.chat_id;\nEND;\n$$ LANGUAGE plpgsql;\n",
+        "height": 1104,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2032,
+        -1104
+      ],
+      "typeVersion": 1,
+      "id": "96ef34cb-5174-48db-b35a-8ac36d59a791",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import hashlib\nimport hmac\nimport time\nimport os\n\nttl_minutes = 30\nsecret = os.getenv(\"SECRET_KEY\", \"supersecret\")  # env var or fallback\nbase_url = \"https://myn8n.megaheretz1378.website/webhook-test/approval\"\n\nnow = int(time.time())\nexpires_at = now + ttl_minutes * 60\n\nout = []\n\nfor item in items:\n    cid = item[\"json\"].get(\"correlation_id\")\n    new_status = item[\"json\"].get(\"new_status\")\n\n    # build payload string\n    payload = f\"{cid}|{new_status}|{expires_at}\"\n    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()\n\n    approve_link = f\"{base_url}?cid={cid}&status={new_status}&action=approve&exp={expires_at}&sig={sig}\"\n    reject_link  = f\"{base_url}?cid={cid}&status={new_status}&action=reject&exp={expires_at}&sig={sig}\"\n\n    out.append({\n        \"json\": {\n            **item[\"json\"],\n            \"approve_link\": approve_link,\n            \"reject_link\": reject_link,\n            \"expires_at\": expires_at\n        }\n    })\n\nreturn out\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        -656
+      ],
+      "id": "c9d6e530-b80c-4c5e-a4e5-2818de10d5e7",
+      "name": "04c0 FN: Generate Approval Request"
+    },
+    {
+      "parameters": {
+        "chatId": "74166550",
+        "text": "=⚠️ Approval Required\nTicket: {{ $json.correlation_id }}\nRequested Status: {{ $json.new_status }}\n\n✅ Approve: {{ $json.approve_link }}\n❌ Reject: {{ $json.reject_link }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Approve ✅",
+                    "additionalFields": {
+                      "url": "={{ $json.approve_link }}"
+                    }
+                  },
+                  {
+                    "text": "Reject ❌",
+                    "additionalFields": {
+                      "url": "={{ $json.reject_link }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1712,
+        -656
+      ],
+      "id": "cf590a2d-c699-4baa-9a8b-71b02a10358a",
+      "name": "Approval Required",
+      "webhookId": "28f24cef-3e3a-403b-8ff6-fb1998010062",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEoTj5wxpFTeQVpI",
+          "name": "Ticket Intake"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "01 Telegram Trigger: Intake + Status": {
+      "main": [
+        [
+          {
+            "node": "02 Switch: Route by Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 Switch: Route by Command": {
+      "main": [
+        [
+          {
+            "node": "Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "03b FN: Parse Status Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "03a FN: Normalize + Hash",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "03c FN: Parse Update Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Invalid Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03a FN: Normalize + Hash": {
+      "main": [
+        [
+          {
+            "node": "04a DB: Upsert Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04a DB: Upsert Ticket": {
+      "main": [
+        [
+          {
+            "node": "05a Telegram Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03b FN: Parse Status Command": {
+      "main": [
+        [
+          {
+            "node": "03b IF: Has Valid Correlation ID Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04b DB: Get Ticket Status": {
+      "main": [
+        [
+          {
+            "node": "04b1 IF: No Ticket Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03b1 IF: Has Correlation ID": {
+      "main": [
+        [
+          {
+            "node": "04b DB: Get Ticket Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05b Telegram: Status Reply (Error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03c FN: Parse Update Command": {
+      "main": [
+        [
+          {
+            "node": "03c0 IF: Is Operator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03c1 IF: Has Correlation ID": {
+      "main": [
+        [
+          {
+            "node": "03c2 IF: Valid Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03c2 IF: Valid Status": {
+      "main": [
+        [
+          {
+            "node": "04c0 FN: Generate Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05c Telegram: Invalid Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03c0 IF: Is Operator": {
+      "main": [
+        [
+          {
+            "node": "03c1 IF: Has Correlation ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05c0 Telegram: Unauthorized Update Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04b1 IF: Ticket Belongs To User": {
+      "main": [
+        [
+          {
+            "node": "05b Telegram: Status Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05b1 Telegram: Unauthorized Status Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04b0 IF: DB Lookup Failed?": {
+      "main": [
+        [
+          {
+            "node": "05b0 Telegram: Status DB Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "04b1 IF: Ticket Belongs To User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04b1 IF: No Ticket Found": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "04b0 IF: DB Lookup Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03b IF: Has Valid Correlation ID Format": {
+      "main": [
+        [
+          {
+            "node": "03b1 IF: Has Correlation ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Admin": {
+      "main": [
+        [
+          {
+            "node": "DB: List Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB: List Tickets": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a text message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04c0 FN: Generate Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Approval Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "sO4svvZ0NxTR7UaJ"
+  },
+  "versionId": "8c817dec-b0e0-4358-b946-320223c50575",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9c8d0d4640139c59e2bc183c0a14df0fbc0573cb91e494f5db8144fe78fe28ca"
+  },
+  "id": "97pLIRvTjrEXuEU1",
+  "tags": [
+    {
+      "createdAt": "2025-09-20T00:29:20.523Z",
+      "updatedAt": "2025-09-20T00:29:20.523Z",
+      "id": "2GeGGsyXfTwqYkSo",
+      "name": "tickets"
+    },
+    {
+      "createdAt": "2025-09-20T00:29:27.445Z",
+      "updatedAt": "2025-09-20T00:29:27.445Z",
+      "id": "om8IwQB0n3BvXRQi",
+      "name": "telegram"
+    },
+    {
+      "createdAt": "2025-09-20T00:29:36.264Z",
+      "updatedAt": "2025-09-20T00:29:36.264Z",
+      "id": "W9C8bLpyYUmI7kF7",
+      "name": "postgres"
+    }
+  ]
+}
