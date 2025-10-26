@@ -1,5 +1,4 @@
 {
-  "name": "o3_approval_pipeline_v1",
   "nodes": [
     {
       "parameters": {
@@ -11,10 +10,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -240,
-        48
+        -1808,
+        400
       ],
-      "id": "8d604a20-84da-4ade-b6f4-c9a752e86317",
+      "id": "b10a1183-9a00-4694-9136-0191601b8865",
       "name": "01 Webhook Trigger: Approval Decision",
       "webhookId": "12e347b0-b52a-4a2e-b096-4c5448f9641f"
     },
@@ -26,10 +25,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -16,
-        48
+        -1584,
+        400
       ],
-      "id": "69739caa-b158-4dba-926f-4c549df5b787",
+      "id": "f0d4c910-9cbf-4c44-a736-b0c86677de35",
       "name": "02 FN: Verify Signature + TTL"
     },
     {
@@ -43,15 +42,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        672,
-        -160
+        -896,
+        192
       ],
-      "id": "e8c1e6b0-3dd5-4fa4-a1ae-0fbfbd967c77",
+      "id": "bd0f33e6-15ee-408c-a2a2-c507066634aa",
       "name": "04c DB: Update Ticket Status",
       "notesInFlow": true,
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       },
@@ -68,14 +67,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1120,
-        -160
+        -448,
+        192
       ],
-      "id": "82db6abd-6e41-4d62-86e1-3decd397f657",
+      "id": "6e3f3a31-39f1-4e86-be3a-0635045b9429",
       "name": "04c1 DB: Get Ticket Owner",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -108,10 +107,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1344,
-        -256
+        -224,
+        96
       ],
-      "id": "6e7304d6-f474-45ec-bb84-04e4f18abd15",
+      "id": "317c1053-358c-4fe3-8337-6980ef2fa212",
       "name": "04c1a IF: Resolved or In Progress"
     },
     {
@@ -126,17 +125,17 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1792,
-        -352
+        224,
+        -16
       ],
-      "id": "51199feb-dd08-43e1-ac7b-61a14acaffcb",
+      "id": "fbbf75f8-e888-4f41-aeac-f2d2e3db36b1",
       "name": "05c1a Telegram: Notify Resolved",
       "webhookId": "834b2795-7e52-4264-b787-7280bf60de36",
       "retryOnFail": true,
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
@@ -144,7 +143,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=🔄 Your ticket (<code>{{ $json.correlation_id }}<>.code) is now being worked on.  \nWe’ll notify you once it’s resolved.",
+        "text": "=🔄 Your ticket (<code>{{ $json.correlation_id }}</code>) is now being worked on.  \nWe’ll notify you once it’s resolved.",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "HTML"
@@ -153,17 +152,17 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1792,
-        -160
+        224,
+        176
       ],
-      "id": "c67d33f2-fe1c-4cee-9161-733de752a2a2",
+      "id": "2557de34-044b-4ddd-847f-474b9ec26b58",
       "name": "05c1b Telegram: Notify In Progress",
       "webhookId": "560dda9b-b8e5-4e5b-9705-4d6ed17ce50d",
       "retryOnFail": true,
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
@@ -180,17 +179,17 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1344,
-        -64
+        -224,
+        288
       ],
-      "id": "5f00822e-47fe-4825-ad2b-e2e2195212c7",
+      "id": "b0355392-8419-4891-9ab1-e999a1e2ff30",
       "name": "05c Telegram: Update Confirmation",
       "webhookId": "2e047d36-651f-4c1e-9970-8adf7029c70c",
       "retryOnFail": true,
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
@@ -223,10 +222,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        2016,
-        -256
+        448,
+        96
       ],
-      "id": "baf5ad5a-3eb9-4e7a-90fd-0576eaa0c619",
+      "id": "46ee56c0-9ceb-457f-b2db-b93e08eb1a54",
       "name": "Notify Failed?"
     },
     {
@@ -240,14 +239,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2240,
-        -256
+        672,
+        80
       ],
-      "id": "c06890be-289b-4a0d-8494-c865af88dafe",
+      "id": "d4d862e8-7513-4616-8b6c-bae92623a2df",
       "name": "Execute a SQL query",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -263,14 +262,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        896,
-        -160
+        -672,
+        192
       ],
-      "id": "77d73de2-c8fa-4606-9ebd-4befb2a98fa0",
+      "id": "98161678-4f62-4379-bb5f-7b7819b67814",
       "name": "04c2 DB: Insert Audit Row",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -287,16 +286,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1120,
-        32
+        -448,
+        384
       ],
-      "id": "8ab74934-d77b-4eed-bdcb-833226595736",
+      "id": "deb2fe56-f712-416b-b7e2-800b723214cb",
       "name": "Text (reject)",
       "webhookId": "ec8dcd4d-28ad-478c-a1b5-0e87133ff7c5",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -311,14 +310,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        672,
-        32
+        -896,
+        384
       ],
-      "id": "342cf8ef-5004-4202-baf1-81600dc32427",
+      "id": "5b35e81f-50d9-4d64-b6ea-835c25074b1e",
       "name": "04r0 DB: Get Ticket ID",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -334,14 +333,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        896,
-        32
+        -672,
+        384
       ],
-      "id": "6dd0573d-f427-4cbb-a1fd-19da009fe22e",
+      "id": "56eecd7b-206d-48f8-a083-a11fb2561172",
       "name": "Execute a SQL query1",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -374,10 +373,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1568,
-        -352
+        0,
+        0
       ],
-      "id": "6696ddb3-8ade-4ffa-a38d-0cfcbfda63bf",
+      "id": "e5f535d2-293b-4283-a3c5-9b5a8488bdf1",
       "name": "If Resolved"
     },
     {
@@ -408,10 +407,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1568,
-        -160
+        0,
+        192
       ],
-      "id": "6c44cd49-ff15-4b85-bd64-8c2267260cee",
+      "id": "b8090015-6ae0-4335-af1f-fb7332db4ed3",
       "name": "If in_progress"
     },
     {
@@ -524,10 +523,10 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        208,
-        16
+        -1360,
+        368
       ],
-      "id": "3f9db57b-5acb-48a6-a076-4674767c0436",
+      "id": "ba84b2b4-9125-4301-bc5c-54a5ffcc86c2",
       "name": "Actions"
     },
     {
@@ -541,14 +540,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        672,
-        224
+        -896,
+        576
       ],
-      "id": "253f2902-20c0-4d22-9b95-15113be4a1ca",
+      "id": "aa79dd7b-b41c-47bf-a3c0-58ea24dd944b",
       "name": "04e DB: Insert Audit Expired",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -564,14 +563,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        672,
-        416
+        -896,
+        768
       ],
-      "id": "e1ceaed5-7575-404f-8650-17f7777ff14d",
+      "id": "2d42eb22-a242-4f35-86c1-a88a3f71bf3b",
       "name": "04i DB: Insert Audit Invalid",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -585,16 +584,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        896,
-        224
+        -672,
+        576
       ],
-      "id": "c6dbb853-7e73-4694-9109-04a8107c31f7",
+      "id": "d4fec9c2-14b4-4b2f-8092-a60909a9aea2",
       "name": "05e Telegram: Notify Expired",
       "webhookId": "b98a6506-35d0-41a8-8807-574cf8bb60db",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -607,21 +606,20 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        896,
-        416
+        -672,
+        768
       ],
-      "id": "dedde375-a88b-41ba-9f64-1b9368bd3ad8",
+      "id": "0684f4e4-4bec-4cbb-8319-0b72dcf555ab",
       "name": "05i Telegram: Alert Invalid",
       "webhookId": "964c3124-8fd4-4e92-b310-8ff4fa58cba0",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     }
   ],
-  "pinData": {},
   "connections": {
     "01 Webhook Trigger: Approval Decision": {
       "main": [
@@ -710,11 +708,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "05c Telegram: Update Confirmation": {
-      "main": [
-        []
       ]
     },
     "Notify Failed?": {
@@ -838,28 +831,9 @@
       ]
     }
   },
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "versionId": "a29cc1fd-bbc6-40ef-8bb8-e102ac2e1401",
+  "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "9c8d0d4640139c59e2bc183c0a14df0fbc0573cb91e494f5db8144fe78fe28ca"
-  },
-  "id": "HfEkAtmsQL3fkHlQ",
-  "tags": [
-    {
-      "createdAt": "2025-09-21T12:41:32.724Z",
-      "updatedAt": "2025-09-21T12:41:32.724Z",
-      "id": "U3dmJtj3rIeNH0Es",
-      "name": "o2"
-    },
-    {
-      "createdAt": "2025-09-21T12:41:41.273Z",
-      "updatedAt": "2025-09-21T12:41:41.273Z",
-      "id": "Zs63pCZlRakSC2XC",
-      "name": "triage"
-    }
-  ]
+  }
 }
