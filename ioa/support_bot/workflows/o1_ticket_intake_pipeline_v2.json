@@ -1,5 +1,4 @@
 {
-  "name": "IOA O1 ticket_intake_pipeline",
   "nodes": [
     {
       "parameters": {
@@ -11,17 +10,17 @@
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.2,
       "position": [
-        -1264,
-        -752
+        -320,
+        1104
       ],
-      "id": "75750076-a6ed-45b1-addb-3189432fe028",
+      "id": "082f8c15-fe77-44ee-b1c4-f2f44d0dedf7",
       "name": "01 Telegram Trigger: Intake + Status",
       "webhookId": "ce5e4331-643e-4f6f-b465-96e93b097863",
       "notesInFlow": true,
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Listens for Telegram bot messages. Routes commands like /start, /new, /status, /update, /list into the Switch node."
@@ -161,50 +160,49 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -1008,
-        -816
+        -64,
+        1040
       ],
-      "id": "091db64b-c128-432f-86f6-b1a02c80b207",
+      "id": "79eb3cbc-fe67-474a-a9d7-eff71ee33db9",
       "name": "02 Switch: Route by Command",
       "notesInFlow": true,
       "notes": "Splits incoming commands into different branches. Output keys = command names (/new, /status, etc.). Fallback = Invalid Command."
     },
     {
       "parameters": {
-        "language": "python",
-        "pythonCode": "import re\nimport hashlib\nimport uuid\n\n# Get the first incoming item\nitem = items[0]\n\n# Correct path to Telegram text\ntext = item[\"json\"].get(\"message\", {}).get(\"text\", \"\")\n\n# Defaults\nparsed = {\n    \"requester_name\": \"Unknown\",\n    \"requester_email\": \"unknown@example.com\",\n    \"requester_phone\": \"N/A\",\n    \"subject\": \"No subject\",\n    \"description\": \"No description\",\n    \"source\": \"telegram\",\n    \"priority\": \"normal\",\n    \"status\": \"new\",        # added here instead of in query\n    \"external_id\": None\n}\n\n# Regex patterns\npatterns = {\n    \"requester_name\": r\"Name:\\s*(.+)\",\n    \"requester_email\": r\"Email:\\s*(\\S+)\",\n    \"requester_phone\": r\"Phone:\\s*(.+)\",\n    \"subject\": r\"Subject:\\s*(.+)\",\n    \"description\": r\"Description:\\s*(.+)\"\n}\n\nfor key, pattern in patterns.items():\n    match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)\n    if match:\n        parsed[key] = match.group(1).strip()\n\n# Correlation ID\nparsed[\"correlation_id\"] = str(uuid.uuid4())\n\n# Build dedupe key\ndedupe_source = f\"{parsed['requester_email']}|{parsed['subject']}\"\nparsed[\"dedupe_key\"] = hashlib.sha256(dedupe_source.encode()).hexdigest()\n\n# External ID from Telegram chat\nchat_id = item[\"json\"].get(\"message\", {}).get(\"chat\", {}).get(\"id\")\nparsed[\"external_id\"] = str(chat_id) if chat_id else \"N/A\"\n\n# Output in correct n8n format\nreturn [{\"json\": parsed}]\n"
+        "jsCode": "// ---------- tiny SHA-256 (pure JS, no imports) ----------\nfunction sha256(message) {\n  // convert string to bytes (UTF-8)\n  function toBytes(str) {\n    const bytes = [];\n    for (let i = 0; i < str.length; i++) {\n      let c = str.charCodeAt(i);\n      if (c < 0x80) bytes.push(c);\n      else if (c < 0x800) { bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f)); }\n      else if (c < 0xD800 || c >= 0xE000) {\n        bytes.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));\n      } else {\n        // surrogate pair\n        i++;\n        const c2 = str.charCodeAt(i);\n        const codePoint = 0x10000 + (((c & 0x3FF) << 10) | (c2 & 0x3FF));\n        bytes.push(\n          0xF0 | (codePoint >> 18),\n          0x80 | ((codePoint >> 12) & 0x3F),\n          0x80 | ((codePoint >> 6) & 0x3F),\n          0x80 | (codePoint & 0x3F)\n        );\n      }\n    }\n    return bytes;\n  }\n  function rotr(n, x) { return (x >>> n) | (x << (32 - n)); }\n  function toHex(n) { return ('00000000' + (n >>> 0).toString(16)).slice(-8); }\n\n  const K = [\n    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,\n    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,\n    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,\n    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,\n    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,\n    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,\n    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,\n    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2\n  ];\n\n  let H0 = 0x6a09e667, H1 = 0xbb67ae85, H2 = 0x3c6ef372, H3 = 0xa54ff53a;\n  let H4 = 0x510e527f, H5 = 0x9b05688c, H6 = 0x1f83d9ab, H7 = 0x5be0cd19;\n\n  const bytes = toBytes(message);\n  const bitLen = bytes.length * 8;\n\n  // padding\n  bytes.push(0x80);\n  while ((bytes.length % 64) !== 56) bytes.push(0);\n  // append length\n  for (let i = 7; i >= 0; i--) bytes.push((bitLen >>> (i * 8)) & 0xff);\n\n  // process chunks\n  const W = new Array(64);\n  for (let i = 0; i < bytes.length; i += 64) {\n    for (let t = 0; t < 16; t++) {\n      const j = i + t * 4;\n      W[t] = (bytes[j] << 24) | (bytes[j + 1] << 16) | (bytes[j + 2] << 8) | (bytes[j + 3]);\n    }\n    for (let t = 16; t < 64; t++) {\n      const s0 = rotr(7, W[t - 15]) ^ rotr(18, W[t - 15]) ^ (W[t - 15] >>> 3);\n      const s1 = rotr(17, W[t - 2]) ^ rotr(19, W[t - 2]) ^ (W[t - 2] >>> 10);\n      W[t] = (W[t - 16] + s0 + W[t - 7] + s1) | 0;\n    }\n\n    let a = H0, b = H1, c = H2, d = H3, e = H4, f = H5, g = H6, h = H7;\n\n    for (let t = 0; t < 64; t++) {\n      const S1 = rotr(6, e) ^ rotr(11, e) ^ rotr(25, e);\n      const ch = (e & f) ^ (~e & g);\n      const temp1 = (h + S1 + ch + K[t] + W[t]) | 0;\n      const S0 = rotr(2, a) ^ rotr(13, a) ^ rotr(22, a);\n      const maj = (a & b) ^ (a & c) ^ (b & c);\n      const temp2 = (S0 + maj) | 0;\n\n      h = g; g = f; f = e;\n      e = (d + temp1) | 0;\n      d = c; c = b; b = a;\n      a = (temp1 + temp2) | 0;\n    }\n\n    H0 = (H0 + a) | 0; H1 = (H1 + b) | 0; H2 = (H2 + c) | 0; H3 = (H3 + d) | 0;\n    H4 = (H4 + e) | 0; H5 = (H5 + f) | 0; H6 = (H6 + g) | 0; H7 = (H7 + h) | 0;\n  }\n  return toHex(H0) + toHex(H1) + toHex(H2) + toHex(H3) + toHex(H4) + toHex(H5) + toHex(H6) + toHex(H7);\n}\n// ---------- end SHA-256 ----------\n\n// Pull the Telegram text\nconst text = $input.first().json.message.text || \"\";\n\nfunction extract(pattern) {\n  const m = text.match(pattern);\n  return m ? m[1].trim() : \"\";\n}\n\n// Parse fields\nconst parsed = {\n  requester_name:  extract(/Name:\\s*(.*)/i),\n  requester_email: extract(/Email:\\s*([\\w.-]+@[\\w.-]+)/i),\n  requester_phone: extract(/Phone:\\s*(\\+?\\d+)/i),\n  subject:         extract(/Subject:\\s*(.*)/i),\n  description:     extract(/Description:\\s*(.*)/i),\n  source:  \"telegram\",\n  priority: \"normal\",\n  status:   \"new\",\n};\n\n// Dedupe key = sha256(email|subject)\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nconst dedupeSource = `${parsed.requester_email || \"none\"}|${parsed.subject || \"none\"}`;\nparsed.dedupe_key = sha256(dedupeSource);\n\n\n// Placeholder correlation_id; DB check will replace it if existing ticket found\nparsed.correlation_id = parsed.correlation_id || uuidv4();\n\n// Telegram chat id\nparsed.external_id = String($input.first().json.message.chat.id || \"N/A\");\nparsed.chat_id = String($json.message?.chat?.id || \"0\");\n\n// Output for the next nodes\nreturn [{ json: parsed }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -704,
-        -896
+        240,
+        960
       ],
-      "id": "8bab1b34-6033-47ae-b998-04f74c388c49",
+      "id": "ea49029e-ba19-409d-8e58-599f0a1651a3",
       "name": "03a FN: Normalize + Hash",
       "notes": "Parses ticket info from freeform Telegram text (Name, Email, Phone, Subject, Description). Generates correlation ID (UUID) and dedupe key (SHA-256 hash of email+subject)."
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, correlation_id, chat_id\nFROM upsert_ticket(\n  $1::uuid,\n  $2::text,\n  $3::text,\n  $4::text,\n  $5::text,\n  $6::text,\n  $7::text,\n  $8::text,\n  $9::text,\n  $10::text,\n  $11::text,\n  $12::text\n);\n",
+        "query": "SELECT id, correlation_id, chat_id\nFROM upsert_ticket(\n  $1::uuid,\n  $2::text,\n  $3::text,\n  $4::text,\n  $5::text,\n  $6::text,\n  $7::text,\n  $8::text,\n  $9::text,\n  $10::text,\n  $11::text,\n  $12::bigint\n);\n",
         "options": {
-          "queryReplacement": "={{$json.correlation_id}}\n\n{{$json.source}}\n\n{{$json.external_id}}\n\n{{$json.requester_name}}\n\n{{$json.requester_email}}\n\n{{$json.requester_phone}}\n\n{{$json.subject}}\n\n{{$json.description}}\n\n{{$json.status}}\n\n{{$json.priority}}\n\n{{$json.dedupe_key}}\n\n{{ $json.external_id }}",
+          "queryReplacement": "={{ $json.correlation_id }}\n{{ $json.requester_name }}\n{{ $json.requester_email }}\n{{ $json.requester_phone }}\n{{ $json.subject }}\n{{ $json.description }}\n{{ $json.source }}\n{{ $json.priority }}\n{{ $json.status }}\n{{ $json.dedupe_key }}\n{{ $json.external_id }}\n{{ $json.chat_id }}\n\n",
           "replaceEmptyStrings": true
         }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -384,
-        -896
+        560,
+        960
       ],
-      "id": "653cffb0-47ac-4a55-a4c6-a83d430c21a1",
+      "id": "98c36c2d-ac44-49dd-9c68-f410c69f0dfa",
       "name": "04a DB: Upsert Ticket",
       "notesInFlow": true,
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       },
@@ -222,16 +220,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -32,
-        -896
+        912,
+        960
       ],
-      "id": "c1af2b46-5723-433c-a89d-a53a4b7ecd4a",
+      "id": "cf1dd560-176a-4b80-b7aa-c46519be7389",
       "name": "05a Telegram Ack",
       "webhookId": "f2d3d095-31e4-4972-9047-5a6350672e43",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
@@ -244,10 +242,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -720,
-        -1328
+        224,
+        528
       ],
-      "id": "385ed93d-2724-4e9c-a01e-4b5196bd7f66",
+      "id": "87f7ae26-b86f-4d09-adde-7017f268aa28",
       "name": "03b FN: Parse Status Command"
     },
     {
@@ -261,17 +259,17 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        64,
-        -1696
+        1008,
+        160
       ],
-      "id": "cce164fe-f498-4b6a-9bb0-682a18b69c52",
+      "id": "871fe5da-f886-48b7-884d-dcebb6b240e2",
       "name": "04b DB: Get Ticket Status",
       "retryOnFail": true,
       "alwaysOutputData": true,
       "notesInFlow": true,
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       },
@@ -288,16 +286,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1440,
-        -1248
+        2384,
+        608
       ],
-      "id": "aaf75df1-e658-4c61-9a66-d75fb4089043",
+      "id": "cab20db5-d368-4111-acfb-0fae2e7a55a2",
       "name": "05b Telegram: Status Reply",
       "webhookId": "bae8bec4-4af5-4bf9-bba6-218b8bd5b0f8",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -329,10 +327,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -256,
-        -1680
+        688,
+        176
       ],
-      "id": "2b5da54f-d452-4949-a8a3-423cc883323c",
+      "id": "aa78e1ce-63bb-47d8-ac1f-c010c298c17e",
       "name": "03b1 IF: Has Correlation ID"
     },
     {
@@ -347,16 +345,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        64,
-        -1424
+        1008,
+        432
       ],
-      "id": "f2b9c375-50fa-453d-b234-c42568248fa2",
+      "id": "c360b869-c7eb-4270-88d6-9bf801ada2d6",
       "name": "05b Telegram: Status Reply (Error)",
       "webhookId": "4095be65-c09f-4d65-8800-8f8d9e5b46a4",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
@@ -372,16 +370,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -720,
-        16
+        224,
+        1872
       ],
-      "id": "eada2e4a-9ea8-4bc3-8ed4-02912e052421",
+      "id": "f3116469-b601-436e-b3c6-bf42a893a0f6",
       "name": "Telegram: Invalid Command",
       "webhookId": "84089957-fe6b-432b-8828-ccd7930ce954",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -393,10 +391,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -400,
-        -576
+        544,
+        1280
       ],
-      "id": "4fac7f4e-3d98-418b-ac32-f5211b837846",
+      "id": "24070bee-55b0-4920-aab3-35c2d8bdf8a2",
       "name": "03c FN: Parse Update Command"
     },
     {
@@ -427,10 +425,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        304,
-        -800
+        1248,
+        1056
       ],
-      "id": "f1fcd9a7-4ef6-4e64-a823-1762df180d77",
+      "id": "fb6323a2-e264-4d4e-826b-fb64e1acb26c",
       "name": "03c1 IF: Has Correlation ID"
     },
     {
@@ -444,16 +442,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        640,
-        -512
+        1584,
+        1344
       ],
-      "id": "8090cc41-0f99-422d-96a5-c8843c35325b",
+      "id": "13401a4f-f18e-490e-94fd-51ea6cf3d089",
       "name": "Send a text message",
       "webhookId": "168df2e1-e83a-4ba9-b679-072bd8f51df8",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -504,10 +502,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        656,
-        -816
+        1600,
+        1040
       ],
-      "id": "a8c971fd-6cfe-41c7-92b4-bb9f1953b5cb",
+      "id": "b912f0e4-2188-4ad6-9e3e-1b20cf266926",
       "name": "03c2 IF: Valid Status"
     },
     {
@@ -515,22 +513,23 @@
         "chatId": "={{ $('01 Telegram Trigger: Intake + Status').item.json.message.from.id }}",
         "text": "=⚠️ Invalid status. Allowed values: new, in_progress, resolved.",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1440,
-        -336
+        2384,
+        1520
       ],
-      "id": "0a37f3c6-381b-4207-bbe9-c800d15b4088",
+      "id": "c0814365-f15b-4007-b657-4251ba4bcdb5",
       "name": "05c Telegram: Invalid Status",
       "webhookId": "477de1f0-cea0-4b5e-80e8-283af9452d4a",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       },
       "notes": "Sends user-facing messages back to Telegram. Content depends on workflow branch (acknowledgment, errors, updates)."
@@ -564,10 +563,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -96,
-        -576
+        848,
+        1280
       ],
-      "id": "58ede8e7-2288-4d49-9e7b-3c0821d2776a",
+      "id": "a94ae0b3-0f56-4005-9d6d-cc0498ad6eb3",
       "name": "03c0 IF: Is Operator"
     },
     {
@@ -581,16 +580,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        320,
-        -384
+        1264,
+        1472
       ],
-      "id": "476ce475-7f83-4280-97c7-7def7ea3a96c",
+      "id": "6cd73f91-25bb-4b62-afd8-00d41a1964c1",
       "name": "05c0 Telegram: Unauthorized Update Attempt",
       "webhookId": "c0905e30-f115-4e85-9b24-ab26e3954ad3",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -622,10 +621,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1072,
-        -1232
+        2016,
+        624
       ],
-      "id": "00a3fad9-7621-491f-9cfe-067d2b5cffec",
+      "id": "a4eccc11-7910-4f0f-9c1c-41cbee20620b",
       "name": "04b1 IF: Ticket Belongs To User"
     },
     {
@@ -639,16 +638,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1456,
-        -960
+        2400,
+        896
       ],
-      "id": "c4a06b94-befd-4187-8e51-dcd24cc477f4",
+      "id": "c9cf0d2b-8159-4cff-b9dd-33fdfb54939b",
       "name": "05b1 Telegram: Unauthorized Status Check",
       "webhookId": "0fa252cb-177d-4e95-8456-34753477d976",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -680,10 +679,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        816,
-        -1472
+        1760,
+        384
       ],
-      "id": "da20820c-0a9f-4bfc-a945-6f31b58adbb1",
+      "id": "6f803122-57d8-4dda-a62f-821e9f85a3dc",
       "name": "04b0 IF: DB Lookup Failed?"
     },
     {
@@ -697,16 +696,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1440,
-        -1488
+        2384,
+        368
       ],
-      "id": "f26b512a-cd14-4766-98ba-34e6fdc572b7",
+      "id": "a0d0c661-a39b-470a-a441-70f66fc465f4",
       "name": "05b0 Telegram: Status DB Error",
       "webhookId": "96e6b1fa-9500-4e81-8433-ec87963af06b",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -738,10 +737,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        416,
-        -1696
+        1360,
+        160
       ],
-      "id": "ced6568d-f760-4ec1-b1c6-cb4c23fb3f25",
+      "id": "3d286e56-7a5c-47b6-9aa6-26a688105c2d",
       "name": "04b1 IF: No Ticket Found"
     },
     {
@@ -755,16 +754,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        800,
-        -1712
+        1744,
+        144
       ],
-      "id": "a9146b44-f4e3-4727-b384-ef8466cb2ad6",
+      "id": "e1741c50-435e-4620-a52b-729a1433d669",
       "name": "Send a text message1",
       "webhookId": "cc28681b-50ca-45f5-a024-bef21cb8ae36",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -795,10 +794,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -416,
-        -1328
+        528,
+        528
       ],
-      "id": "5412e621-8f63-4779-9487-f118f59eb53d",
+      "id": "5cd8a26a-27fb-4a7b-bed3-a374184e5118",
       "name": "03b IF: Has Valid Correlation ID Format"
     },
     {
@@ -812,16 +811,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -32,
-        -1136
+        912,
+        720
       ],
-      "id": "828ff628-4ba8-48b6-a7a6-56b6a88cdcff",
+      "id": "c44d6804-c1b3-470b-a4dc-db91dd45759b",
       "name": "Send a text message2",
       "webhookId": "2291928b-6bdc-4071-84f6-f8d84484198e",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -837,16 +836,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -752,
-        -1728
+        192,
+        128
       ],
-      "id": "2fcb38f7-640b-45f1-9553-b86e5e03e54c",
+      "id": "291233ac-8b18-4349-bbcf-fb4b6162e734",
       "name": "Welcome Message",
       "webhookId": "b7ac58ed-e8d7-48e8-b9a1-3a52e1376b2c",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -862,16 +861,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        304,
-        224
+        1248,
+        2080
       ],
-      "id": "a21a6f03-937a-473e-b4c4-7dabd4cdb5dd",
+      "id": "8e802c3e-2216-466e-8a5d-98c4aa97f2ad",
       "name": "Send a text message3",
       "webhookId": "42cc248a-3229-49e4-a21a-2c2ed5059a49",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -888,7 +887,7 @@
             {
               "id": "ce4f2418-7a43-44b5-845e-8abf8d0108b2",
               "leftValue": "={{$json[\"message\"][\"from\"][\"id\"]}}",
-              "rightValue": "YOUR_ADMIN_ID",
+              "rightValue": "=74166550",
               "operator": {
                 "type": "string",
                 "operation": "equals",
@@ -904,10 +903,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -208,
-        -192
+        736,
+        1664
       ],
-      "id": "20af9ef3-46a2-49db-b4aa-1d3095537a6e",
+      "id": "dd6b09d3-92e4-4652-bb58-655f233d4656",
       "name": "Check Admin"
     },
     {
@@ -919,14 +918,14 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        304,
-        -64
+        1248,
+        1792
       ],
-      "id": "d8eaaa4e-974c-499a-b0d9-aa5071bf6561",
+      "id": "cf073cb2-ddc6-46a1-a4d9-6646833ce984",
       "name": "DB: List Tickets",
       "credentials": {
         "postgres": {
-          "id": "DeyLRt5YrGqjUrds",
+          "id": "fygXUREce51xEoZE",
           "name": "Postgres account"
         }
       }
@@ -943,16 +942,16 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        720,
-        -64
+        1664,
+        1792
       ],
-      "id": "be2901bf-2d8a-4adf-9366-72c0cbe8383c",
+      "id": "85f5c35c-10f1-417b-97e5-497d29c0e505",
       "name": "Send a text message4",
       "webhookId": "93444267-52aa-4b71-bb7a-ade43f15f6ad",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     },
@@ -963,10 +962,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        512,
-        -64
+        1456,
+        1792
       ],
-      "id": "a51a7d6c-2d88-493b-9b63-e00f26d550e2",
+      "id": "8df8fda2-74bc-48ad-b6d5-a08680ae8e8c",
       "name": "Code in JavaScript"
     },
     {
@@ -978,26 +977,26 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "position": [
-        -2816,
-        -1104
+        -1872,
+        752
       ],
       "typeVersion": 1,
-      "id": "db493f96-774a-4867-8baf-ec6101712005",
+      "id": "7fbd43dd-a1b6-41d8-8aa9-226ba065c8bf",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "# 📌 Function: upsert_ticket\n\n### Purpose → Insert or update a support ticket in the tickets table.\n### Returns → id, correlation_id, chat_id.\n\n### 🧩 SQL Template\n-- Create or replace the upsert_ticket function\nCREATE OR REPLACE FUNCTION upsert_ticket(\n    p_correlation_id UUID,\n    p_source TEXT,\n    p_external_id TEXT,\n    p_requester_name TEXT,\n    p_requester_email TEXT,\n    p_requester_phone TEXT,\n    p_subject TEXT,\n    p_description TEXT,\n    p_status TEXT,\n    p_priority TEXT,\n    p_dedupe_key TEXT,\n    p_chat_id TEXT\n)\nRETURNS TABLE (\n    id BIGINT,\n    correlation_id UUID,\n    chat_id TEXT\n) AS $$\nBEGIN\n    INSERT INTO tickets (\n        correlation_id, source, external_id,\n        requester_name, requester_email, requester_phone,\n        subject, description, status, priority, dedupe_key, chat_id,\n        created_at, updated_at\n    )\n    VALUES (\n        p_correlation_id, p_source, p_external_id,\n        p_requester_name, p_requester_email, p_requester_phone,\n        p_subject, p_description, p_status, p_priority, p_dedupe_key, p_chat_id,\n        NOW(), NOW()\n    )\n    ON CONFLICT (correlation_id)\n    DO UPDATE SET\n        requester_name = EXCLUDED.requester_name,\n        requester_email = EXCLUDED.requester_email,\n        requester_phone = EXCLUDED.requester_phone,\n        subject = EXCLUDED.subject,\n        description = EXCLUDED.description,\n        status = EXCLUDED.status,\n        priority = EXCLUDED.priority,\n        dedupe_key = EXCLUDED.dedupe_key,\n        updated_at = NOW()\n    RETURNING tickets.id, tickets.correlation_id, tickets.chat_id;\nEND;\n$$ LANGUAGE plpgsql;\n",
+        "content": "# 📌 Function: upsert_ticket\n\n### Purpose → Insert or update a support ticket in the tickets table.\n### Returns → id, correlation_id, chat_id.\n\n### 🧩 SQL Template\n-- CREATE OR REPLACE FUNCTION public.upsert_ticket(\n    _correlation_id UUID,\n    _source TEXT,\n    _external_id TEXT,\n    _requester_name TEXT,\n    _requester_email TEXT,\n    _requester_phone TEXT,\n    _subject TEXT,\n    _description TEXT,\n    _status TEXT,\n    _priority TEXT,\n    _dedupe_key TEXT,\n    _chat_id BIGINT  -- Make sure this is BIGINT\n)\nRETURNS TABLE (id BIGINT, correlation_id UUID, chat_id BIGINT)\nAS $$\n#variable_conflict use_column  -- <-- ADD THIS LINE\nBEGIN\n  INSERT INTO public.tickets AS t (\n      correlation_id, source, external_id, requester_name, requester_email, \n      requester_phone, subject, description, status, priority, dedupe_key, \n      chat_id, created_at, updated_at\n  )\n  VALUES (\n      _correlation_id, _source, _external_id, _requester_name, _requester_email, \n      _requester_phone, _subject, _description, _status, _priority, _dedupe_key, \n      _chat_id, NOW(), NOW()\n  )\n  ON CONFLICT (correlation_id)\n  DO UPDATE\n  SET \n      source          = EXCLUDED.source,         -- <-- Added this\n      external_id     = EXCLUDED.external_id,  -- <-- Added this\n      requester_name  = EXCLUDED.requester_name,\n      requester_email = EXCLUDED.requester_email,\n      requester_phone = EXCLUDED.requester_phone,\n      subject         = EXCLUDED.subject,\n      description     = EXCLUDED.description,\n      status          = EXCLUDED.status,\n      priority        = EXCLUDED.priority,\n      dedupe_key      = EXCLUDED.dedupe_key,\n      updated_at      = NOW();\n\n  RETURN QUERY\n  SELECT t.id, t.correlation_id, t.chat_id\n  FROM public.tickets AS t\n  WHERE t.correlation_id = _correlation_id;\nEND;\n$$ LANGUAGE plpgsql;",
         "height": 1104,
         "width": 688
       },
       "type": "n8n-nodes-base.stickyNote",
       "position": [
-        -2032,
-        -1104
+        -1088,
+        752
       ],
       "typeVersion": 1,
-      "id": "96ef34cb-5174-48db-b35a-8ac36d59a791",
+      "id": "cc404aeb-f1f3-4bb8-b5fd-9e8e7b3889b7",
       "name": "Sticky Note1"
     },
     {
@@ -1008,10 +1007,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1424,
-        -656
+        2368,
+        1200
       ],
-      "id": "c9d6e530-b80c-4c5e-a4e5-2818de10d5e7",
+      "id": "35e92436-a66c-4237-a9c5-651c09c2f52a",
       "name": "04c0 FN: Generate Approval Request"
     },
     {
@@ -1042,27 +1041,27 @@
           ]
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1712,
-        -656
+        2656,
+        1200
       ],
-      "id": "cf590a2d-c699-4baa-9a8b-71b02a10358a",
+      "id": "5a434b56-bdc9-41f4-b006-1a0e0d64e038",
       "name": "Approval Required",
       "webhookId": "28f24cef-3e3a-403b-8ff6-fb1998010062",
       "credentials": {
         "telegramApi": {
-          "id": "PEoTj5wxpFTeQVpI",
-          "name": "Ticket Intake"
+          "id": "gNzLp6KDcHUJs4ZN",
+          "name": "intake-bot"
         }
       }
     }
   ],
-  "pinData": {},
   "connections": {
     "01 Telegram Trigger: Intake + Status": {
       "main": [
@@ -1372,36 +1371,9 @@
       ]
     }
   },
-  "active": false,
-  "settings": {
-    "executionOrder": "v1",
-    "callerPolicy": "workflowsFromSameOwner",
-    "errorWorkflow": "sO4svvZ0NxTR7UaJ"
-  },
-  "versionId": "8c817dec-b0e0-4358-b946-320223c50575",
+  "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "9c8d0d4640139c59e2bc183c0a14df0fbc0573cb91e494f5db8144fe78fe28ca"
-  },
-  "id": "97pLIRvTjrEXuEU1",
-  "tags": [
-    {
-      "createdAt": "2025-09-20T00:29:20.523Z",
-      "updatedAt": "2025-09-20T00:29:20.523Z",
-      "id": "2GeGGsyXfTwqYkSo",
-      "name": "tickets"
-    },
-    {
-      "createdAt": "2025-09-20T00:29:27.445Z",
-      "updatedAt": "2025-09-20T00:29:27.445Z",
-      "id": "om8IwQB0n3BvXRQi",
-      "name": "telegram"
-    },
-    {
-      "createdAt": "2025-09-20T00:29:36.264Z",
-      "updatedAt": "2025-09-20T00:29:36.264Z",
-      "id": "W9C8bLpyYUmI7kF7",
-      "name": "postgres"
-    }
-  ]
+  }
 }
